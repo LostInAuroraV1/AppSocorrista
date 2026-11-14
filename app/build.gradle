@@ -1,0 +1,39 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'br.com.codigoderesgate'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'br.com.codigoderesgate'
+        minSdk 24
+        targetSdk 34
+        versionCode((project.findProperty('VERSION_CODE') ?: '11') as int)
+        versionName(project.findProperty('VERSION_NAME') ?: '1.1.0')
+        // Repositório onde as atualizações são publicadas (Releases). O GitHub Actions preenche sozinho.
+        resValue 'string', 'github_repo', (project.findProperty('GITHUB_REPO') ?: '')
+    }
+
+    signingConfigs {
+        teste {
+            // Chave de TESTE para avaliação. Mantém a mesma assinatura entre versões,
+            // então cada APK novo instala por cima do anterior sem perder o progresso.
+            // Para a Play Store, use uma chave de upload própria e guardada em sigilo.
+            storeFile file(System.getenv('KEYSTORE_FILE') ?: 'teste-codigoderesgate.jks')
+            storePassword 'resgate192'
+            keyAlias 'codigoderesgate'
+            keyPassword 'resgate192'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.teste
+        }
+    }
+    lint { checkReleaseBuilds false; abortOnError false }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
