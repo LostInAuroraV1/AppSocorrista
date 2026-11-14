@@ -1,0 +1,49 @@
+name: Publicar atualização
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Número da nova versão (ex.: 1.2.0) — sempre maior que a anterior'
+        required: true
+      novidades:
+        description: 'O que mudou (aparece para os jogadores)'
+        required: false
+        default: 'Melhorias e novas missões.'
+permissions:
+  contents: write
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - name: Conferir versão
+        id: v
+        run: |
+          V="${{ inputs.versao }}"; V="${V#v}"
+          if ! echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "::error::Use o formato 1.2.0"; exit 1; fi
+          IFS=. read MA MI PA <<< "$V"
+          echo "name=$V" >> "$GITHUB_OUTPUT"
+          echo "code=$((MA*10000+MI*100+PA))" >> "$GITHUB_OUTPUT"
+      - name: Chave de assinatura (segredo KEYSTORE_B64)
+        env: { KEYSTORE_B64: '${{ secrets.KEYSTORE_B64 }}' }
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::Cadastre o segredo KEYSTORE_B64 (veja LEIA-ME)"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/chave.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/chave.jks" >> "$GITHUB_ENV"
+      - name: Gerar APK
+        run: |
+          gradle assembleRelease -PGITHUB_REPO=${{ github.repository }} -PVERSION_NAME=${{ steps.v.outputs.name }} -PVERSION_CODE=${{ steps.v.outputs.code }}
+          cp app/build/outputs/apk/release/app-release.apk "CodigoDeResgate-${{ steps.v.outputs.name }}.apk"
+      - name: Publicar na aba Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.name }}
+          name: Código de Resgate ${{ steps.v.outputs.name }}
+          body: ${{ inputs.novidades }}
+          make_latest: true
+          files: CodigoDeResgate-${{ steps.v.outputs.name }}.apk
