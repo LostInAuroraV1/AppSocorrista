@@ -966,7 +966,7 @@ function home(){
       <div class="bar"><i style="width:${pct}%"></i></div>
       <div class="small mut" style="margin-top:4px">${S.xp} XP ${nx?`· faltam ${nx.xp-S.xp} para ${nx.n}`:"· patente máxima"}</div></div></div></div>
     <div class="tiles">
-      <button class="tile big" onclick="brief('${next}')"><div class="ico">▶️</div><div><div class="tn">Continuar treinamento</div><div class="td">${MISSIONS[next].t}</div></div></button>
+      ${(()=>{const r=nextRescue();return `<button class="tile big" onclick="brief('${r.id}')"><div class="ico">▶️</div><div><div class="tn">Próximo resgate</div><div class="td">${r.sub}</div></div></button>`})()}
       <button class="tile" onclick="map()"><div class="ico">🩹</div><div class="tn">Primeiros socorros</div><div class="td">Acesso gratuito para todos</div><span class="tag free" style="margin-top:auto;align-self:flex-start">Gratuito</span></button>
       <button class="tile pro" onclick="pro()"><div class="ico">🚑</div><div class="tn">Treinamento profissional</div><div class="td">Simulações avançadas</div><span class="tag pro" style="margin-top:auto;align-self:flex-start">${EVAL_MODE?"Liberado p/ avaliação":"Premium"}</span></button>
       <button class="tile" onclick="evolution()"><div class="ico">📈</div><div class="tn">Minha evolução</div><div class="td">XP, patentes, medalhas e histórico</div></button>
@@ -2282,7 +2282,7 @@ window.chapList=chapList=function(chs,col){let h=_cl(chs,col);const ar=S.chars[S
     return `onclick="brief('${id}')"><div class="dot">${dot}</div><div style="flex:1"><div class="lt"><span class="lvmini" style="background:${L.c}">N${lv}</span> `})};
 /* home: botão por nível */
 const _home=home;
-window.home=home=function(){_home();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#2a1f3d,#172234);border-color:#4a3a6a" onclick="levelsView()"><div class="ico">📶</div><div><div class="tn">Missões por nível</div><div class="td">${Object.keys(MISSIONS).length} ocorrências · níveis 1 a 5</div></div></button>`)};
+window.home=home=function(){_home();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#2a1f3d,#172234);border-color:#4a3a6a" onclick="levelsView()"><div class="ico">📶</div><div><div class="tn">Missões por nível</div><div class="td">Por nível de dificuldade · do 1 ao 5</div></div></button>`)};
 })();
 
 /* ================= v1.0 — 10 novas ocorrências (lista de 100) ================= */
@@ -3851,7 +3851,7 @@ window.catalogView=function(open){
   window.scrollTo(0,0);
 };
 const _home11=home;
-window.home=home=function(){_home11();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#3d1f1f,#172234);border-color:#6a3a3a" onclick="catalogView()"><div class="ico">🚨</div><div><div class="tn">100 ocorrências</div><div class="td">10 categorias · ${Object.keys(CATALOG).length} missões</div></div></button>`)};
+window.home=home=function(){_home11();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#3d1f1f,#172234);border-color:#6a3a3a" onclick="catalogView()"><div class="ico">🚨</div><div><div class="tn">100 ocorrências</div><div class="td">Por categoria · 10 áreas · ${Object.keys(CATALOG).length} missões</div></div></button>`)};
 
 /* ===== v1.1 — atualização pelo GitHub (só no app Android) ===== */
 let UPD=null,UPD_MSG="";
@@ -3879,6 +3879,15 @@ const _home12=home;
 window.home=home=function(){_home12();if(UPD){const g=document.querySelector('.top .back[onclick="settings()"]');if(g)g.insertAdjacentHTML("beforeend",`<span class="upd-dot"></span>`)}};
 document.head.insertAdjacentHTML("beforeend",`<style>.top .back{position:relative}.upd-dot{position:absolute;top:4px;right:4px;width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 2px var(--bg,#0b111b)}.upd-new{background:rgba(255,183,3,.1);border:1px solid rgba(255,183,3,.35);border-radius:12px;padding:10px 12px}</style>`);
 
+/* ===== v1.1.2 — Próximo resgate: segue a lista das 100 ocorrências na função do personagem ===== */
+function nextRescue(){
+  const ar=S.chars[S.activeChar].role;const keyOf=id=>MISSIONS[id].roles?id+":"+ar:id;
+  const items=Object.keys(CATALOG).map(Number).sort((a,b)=>a-b);
+  let n=items.find(n=>!S.best[keyOf(CATALOG[n])]),done=false;
+  if(n===undefined){done=true;n=items.reduce((a,b)=>(S.best[keyOf(CATALOG[a])]||0)<=(S.best[keyOf(CATALOG[b])]||0)?a:b)}
+  const id=CATALOG[n];const role=MISSIONS[id].roles?roleName(S.chars[S.activeChar]):"Gratuita";
+  return {id,sub:`${done?"Revisar · ":""}${n}. ${esc(ITEM_NAMES[n-1])} · ${role}`};
+}
 /* ---------------- INÍCIO ---------------- */
 S.name?home():splash();
 </script>
