@@ -4101,6 +4101,68 @@ window.fichaHtml=function(full){let h=_fichaG(full);if(!M||M.reveal||!GCS_ANS[M.
   return h.replace(/(<small>Glasgow<\/small><b>)[^<]*(<\/b>)(<small><\/small>)?/,"$1a avaliar$2").replace(/Glasgow\s*\d+/gi,"Glasgow: a avaliar")};
 const _repG=report;window.report=report=function(){if(M)M.reveal=1;return _repG.apply(this,arguments)};
 
+/* ===== v1.2.1 — XABCDE para leigos nas missões gratuitas (e-book MS/UFRGS 2025) ===== */
+function layStep(i,title,find,q,ok,okfb,bads){
+  return {stage:3,type:"choice",evt:{i,t:`${title}: ${find}.`},q,ref:"E-book Noções de Primeiros Socorros (MS/UFRGS, 2025) — Avaliação inicial XABCDE",
+    opts:[{t:ok,ok:1,pts:{seg:1,dec:2},fb:"Correto. "+okfb},...bads.map(([t,fb,c])=>({t,fb,ok:0,crit:c?1:0}))]};
+}
+(function addLay(){
+  const SKIP=new Set(["m_pcr","f_engasgo","f_afog","f_choque","f_bebe"]);
+  for(const id in MISSIONS){const b=MISSIONS[id];if(b.pro||SKIP.has(id))continue;const f=FICHA[id];if(!f||!f.abcde)continue;
+    const a=f.abcde,txt=`${f.mec} ${f.queixa}`.toLowerCase();
+    const trauma=/queda|moto|galho|árvore|arvore|colis|atropel|faca|corte|queimadura/.test(txt);
+    const cerv=/queda|moto|galho|árvore|arvore|colis|atropel/.test(txt)||/cervical/.test((a.D||"").toLowerCase());
+    const conv=/convuls|crise|epilep|tremor|febre/.test(txt+" "+(f.obs||"").toLowerCase());
+    const L=s=>(s||"").toLowerCase(),block=[];
+    const C=L(a.C),hemo=/sangr/.test(C)&&!/sem sangr/.test(C);
+    if(trauma)block.push(layStep("❌","X — Hemorragia grave",hemo?a.C:"sem sangramento intenso visível","Há hemorragia que precise de ação imediata?",
+      hemo?"Sim: pressionar firme o ferimento com pano limpo, protegendo as mãos":"Não há hemorragia grave: seguir para a via aérea",
+      hemo?"Hemorragia grave é a primeira prioridade: compressão direta (e torniquete se não parar).":"O X vem primeiro, mas aqui não há sangramento intenso.",
+      hemo?[["Lavar o ferimento antes de pressionar","Primeiro estanque: pressão direta imediata.",1],["Colocar pó de café no corte","Contamina e não estanca.",0],["Esperar o socorro sem tocar","O sangramento intenso mata rápido.",1]]
+          :[["Fazer um torniquete por precaução","Torniquete só para sangramento grave de membro que não para.",0],["Procurar sangramento só no fim","Hemorragia grave é a primeira coisa a checar.",0],["Lavar todos os arranhões primeiro","Não é prioridade agora.",0]]));
+    const A=L(a.A);
+    block.push(layStep("🅰️","A — Via aérea",a.A,"O que fazer com a via aérea?",
+      conv&&/saliva|espuma/.test(A)?"Não colocar nada na boca; assim que os movimentos pararem, virar de lado para a saliva escorrer":
+      /saliva|vômit|vomit|espuma|secre/.test(A)?"Virar a vítima de lado (se não houver suspeita de lesão na coluna) para a secreção escorrer":
+      `A vítima fala: a via aérea está livre${cerv?"; manter a cabeça e o pescoço parados":""}`,
+      cerv?"Com suspeita de lesão na coluna, não movimente o pescoço.":"Quem fala ou chora está com a via aérea livre; secreções saem com a vítima de lado.",
+      [["Colocar o dedo ou uma colher na boca","Pode machucar e empurrar secreções; nunca coloque nada na boca.",1],
+       cerv?["Levantar a cabeça da vítima com um travesseiro","Mexer o pescoço pode agravar lesão na coluna.",1]:["Dar água para limpar a boca","Nada pela boca.",0],
+       ["Sacudir a vítima para ela reagir","Pode causar lesões e não ajuda.",0]]));
+    const B=L(a.B);
+    block.push(layStep("🅱️","B — Respiração",a.B,"Como agir quanto à respiração?",
+      /rápid|acelerad|esforço|falta|chiado/.test(B)?"Afrouxar roupas, deixar em posição confortável e observar a respiração":
+      /irregular/.test(B)?"Observar a respiração; se parar de respirar após a crise, ligar 192 e iniciar RCP":
+      "Respira normalmente: observar o peito subindo e seguir",
+      "No B, observe se o peito sobe, se há esforço ou lábios arroxeados. Sem respiração: RCP.",
+      [["Fazer respiração boca a boca em quem respira","Só se faz RCP em quem não respira normalmente.",0],["Deitar de barriga para baixo","Dificulta a respiração e a observação.",0],["Abanar o rosto e jogar água","Não ajuda a respiração.",0]]));
+    block.push(layStep("©️","C — Circulação",a.C&&a.C!="—"?a.C:"sem sangramento visível","O que fazer no C?",
+      hemo&&trauma?"Manter a pressão no ferimento e observar palidez, suor e pulso acelerado":
+      hemo?"Pressionar firme o sangramento com pano limpo, sem retirar o primeiro pano":
+      /pálid|palid|suor|suad|fri/.test(C)?"Sinais de gravidade: manter em repouso, aquecido, sem dar nada pela boca, e informar o 192":
+      "Sem sangramento ou sinais de choque: seguir e continuar observando",
+      "Palidez, suor e pulso acelerado podem indicar sangramento interno ou queda de pressão: acalmar, não movimentar e chamar socorro (e-book MS).",
+      [["Dar café ou água com açúcar","Nada pela boca: risco de engasgo.",0],["Pedir para a vítima andar para melhorar","Esforço piora; mantenha em repouso.",1],["Deixar a vítima no chão frio e molhado","Mantenha-a aquecida.",0]]));
+    const D=L(a.D);
+    block.push(layStep("🅳","D — Consciência",a.D,"Como está a consciência e o que fazer?",
+      /inconsc|não responde|irrespons/.test(D)?(conv?"Proteger a cabeça, não segurar; após a crise, virar de lado e ligar 192 se não acordar":(cerv?"Inconsciente: não mover, manter a cabeça alinhada e ligar 192":"Inconsciente e respirando: posição lateral de segurança e ligar 192")):
+      /volta a/.test(D)?"Voltou a responder: manter deitada com as pernas elevadas, observar e ligar 192 se não melhorar ou houver sinais de alarme":
+      /confus|sonol|enrolad|déficit|deficit/.test(D)?"Alteração da consciência: ligar 192, não dar nada pela boca e observar se piora":
+      "Acordado: conversar, tranquilizar e observar se o estado muda",
+      "No D, veja se a vítima está acordada, sonolenta ou inconsciente (e-book MS), e repita a observação.",
+      [["Deixar a vítima dormir sem observar","Sonolência pode ser sinal de piora.",0],["Dar um calmante para ela relaxar","Remédio só com orientação médica.",1],["Jogar água fria para ela acordar","Não ajuda e pode causar engasgo.",0]]));
+    if(trauma)block.push(layStep("🇪","E — Exposição",a.E||"verificar o corpo","Como fazer a exposição?",
+      "Olhar o corpo à procura de outras lesões, sem tirar toda a roupa, e cobrir para manter aquecido",
+      "Exponha só o necessário e previna a hipotermia (e-book MS).",
+      [["Tirar toda a roupa da vítima","Exponha só o necessário e mantenha aquecida.",0],["Não olhar o resto do corpo","Lesões escondidas passam despercebidas.",0],["Puxar a parte presa à força","Não retire objetos ou partes presas; aguarde o socorro.",1]]));
+    const st=b.steps.slice();const ki=st.findIndex(s=>s&&s.kit);st.splice(ki>=0?ki+1:0,0,...block);b.steps=st;
+  }
+})();
+/* a ficha mostra o ABCDE só no relatório: durante o atendimento, cada letra é descoberta e decidida na sua etapa */
+const _fichaAB=window.fichaHtml;
+window.fichaHtml=function(full){let h=_fichaAB(full);if(!M||M.reveal)return h;
+  return h.replace(/(Avaliação primária \(ABCDE\)<\/div><div class="fk">)[\s\S]*$/,'$1<b>—</b><span>Será avaliada letra por letra durante o atendimento.</span></div></div>')};
+
 /* ---------------- INÍCIO ---------------- */
 S.name?home():splash();
 </script>
