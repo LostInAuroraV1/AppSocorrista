@@ -966,7 +966,6 @@ function home(){
       <div class="bar"><i style="width:${pct}%"></i></div>
       <div class="small mut" style="margin-top:4px">${S.xp} XP ${nx?`· faltam ${nx.xp-S.xp} para ${nx.n}`:"· patente máxima"}</div></div></div></div>
     <div class="tiles">
-      ${(()=>{const r=nextRescue();return `<button class="tile big" onclick="brief('${r.id}')"><div class="ico">▶️</div><div><div class="tn">Próximo resgate</div><div class="td">${r.sub}</div></div></button>`})()}
       <button class="tile" onclick="map()"><div class="ico">🩹</div><div class="tn">Primeiros socorros</div><div class="td">Acesso gratuito para todos</div><span class="tag free" style="margin-top:auto;align-self:flex-start">Gratuito</span></button>
       <button class="tile pro" onclick="pro()"><div class="ico">🚑</div><div class="tn">Treinamento profissional</div><div class="td">Simulações avançadas</div><span class="tag pro" style="margin-top:auto;align-self:flex-start">${EVAL_MODE?"Liberado p/ avaliação":"Premium"}</span></button>
       <button class="tile" onclick="evolution()"><div class="ico">📈</div><div class="tn">Minha evolução</div><div class="td">XP, patentes, medalhas e histórico</div></button>
@@ -2282,7 +2281,7 @@ window.chapList=chapList=function(chs,col){let h=_cl(chs,col);const ar=S.chars[S
     return `onclick="brief('${id}')"><div class="dot">${dot}</div><div style="flex:1"><div class="lt"><span class="lvmini" style="background:${L.c}">N${lv}</span> `})};
 /* home: botão por nível */
 const _home=home;
-window.home=home=function(){_home();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#2a1f3d,#172234);border-color:#4a3a6a" onclick="levelsView()"><div class="ico">📶</div><div><div class="tn">Missões por nível</div><div class="td">Por nível de dificuldade · do 1 ao 5</div></div></button>`)};
+window.home=home=function(){_home();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#2a1f3d,#172234);border-color:#4a3a6a" onclick="levelsView()"><div class="ico">📶</div><div><div class="tn">Ocorrências por Dificuldade</div><div class="td">Do nível 1 (básico) ao 5 (crítico)</div></div></button>`)};
 })();
 
 /* ================= v1.0 — 10 novas ocorrências (lista de 100) ================= */
@@ -3851,7 +3850,7 @@ window.catalogView=function(open){
   window.scrollTo(0,0);
 };
 const _home11=home;
-window.home=home=function(){_home11();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#3d1f1f,#172234);border-color:#6a3a3a" onclick="catalogView()"><div class="ico">🚨</div><div><div class="tn">100 ocorrências</div><div class="td">Por categoria · 10 áreas · ${Object.keys(CATALOG).length} missões</div></div></button>`)};
+window.home=home=function(){_home11();const t=document.querySelector(".tiles");if(t)t.insertAdjacentHTML("afterbegin",`<button class="tile big" style="background:linear-gradient(135deg,#3d1f1f,#172234);border-color:#6a3a3a" onclick="catalogView()"><div class="ico">🚨</div><div><div class="tn">Ocorrências por Categoria</div><div class="td">Lista oficial · 10 áreas · ${Object.keys(CATALOG).length} ocorrências</div></div></button>`)};
 
 /* ===== v1.1 — atualização pelo GitHub (só no app Android) ===== */
 let UPD=null,UPD_MSG="";
@@ -3879,15 +3878,50 @@ const _home12=home;
 window.home=home=function(){_home12();if(UPD){const g=document.querySelector('.top .back[onclick="settings()"]');if(g)g.insertAdjacentHTML("beforeend",`<span class="upd-dot"></span>`)}};
 document.head.insertAdjacentHTML("beforeend",`<style>.top .back{position:relative}.upd-dot{position:absolute;top:4px;right:4px;width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 2px var(--bg,#0b111b)}.upd-new{background:rgba(255,183,3,.1);border:1px solid rgba(255,183,3,.35);border-radius:12px;padding:10px 12px}</style>`);
 
-/* ===== v1.1.2 — Próximo resgate: segue a lista das 100 ocorrências na função do personagem ===== */
-function nextRescue(){
-  const ar=S.chars[S.activeChar].role;const keyOf=id=>MISSIONS[id].roles?id+":"+ar:id;
-  const items=Object.keys(CATALOG).map(Number).sort((a,b)=>a-b);
-  let n=items.find(n=>!S.best[keyOf(CATALOG[n])]),done=false;
-  if(n===undefined){done=true;n=items.reduce((a,b)=>(S.best[keyOf(CATALOG[a])]||0)<=(S.best[keyOf(CATALOG[b])]||0)?a:b)}
-  const id=CATALOG[n];const role=MISSIONS[id].roles?roleName(S.chars[S.activeChar]):"Gratuita";
-  return {id,sub:`${done?"Revisar · ":""}${n}. ${esc(ITEM_NAMES[n-1])} · ${role}`};
-}
+/* ===== v1.1.2 — abas com "Próxima ocorrência" + escolher ===== */
+function occKey(id){const ar=S.chars[S.activeChar].role;return MISSIONS[id].roles?id+":"+ar:id}
+function occItems(){return Object.keys(CATALOG).map(Number).sort((a,b)=>a-b)}
+function occLevel(n){return levelOf(occKey(CATALOG[n]))}
+function pickNext(list){const n=list.find(n=>!S.best[occKey(CATALOG[n])]);if(n!==undefined)return {n,rev:0};
+  if(!list.length)return null;return {n:list.reduce((a,b)=>(S.best[occKey(CATALOG[a])]||0)<=(S.best[occKey(CATALOG[b])]||0)?a:b),rev:1}}
+function nextBtn(r,ctx){if(!r)return "";const id=CATALOG[r.n];const m=MISSIONS[id];const L=LV[occLevel(r.n)];
+  const role=m.roles?roleName(S.chars[S.activeChar]):"Gratuita";
+  return `<button class="tile big" style="margin:12px 0 4px;background:linear-gradient(135deg,#1d3b2a,#172234);border-color:#2f6a4a" onclick="brief('${id}')"><div class="ico">▶️</div><div><div class="tn">${r.rev?"Revisar ocorrência":"Próxima ocorrência"}</div><div class="td"><span class="lvmini" style="background:${L.c}">N${occLevel(r.n)}</span> ${r.n}. ${esc(ITEM_NAMES[r.n-1])} · ${role}${ctx?` · ${ctx}`:""}</div></div></button>`}
+function occRow(n){const id=CATALOG[n];const m=MISSIONS[id];const key=occKey(id);const lv=levelOf(key);const L=LV[lv];const best=S.best[key];const ar=S.chars[S.activeChar].role;const mm=m.roles?{...m,...m.roles[ar]}:m;
+  return `<button class="les ${best?"done":"play"}" onclick="brief('${id}')"><div class="dot">${best?"✓":"▶"}</div><div style="flex:1"><div class="lt"><span class="lvmini" style="background:${L.c}">N${lv}</span> ${n}. ${esc(ITEM_NAMES[n-1])} <span class="tag ${m.pro?"pro":"free"}" style="font-size:10px;padding:2px 6px">${m.pro?"Profissional":"Gratuita"}</span></div><div class="ls">${esc(mm.t)} · ${best?`Melhor: ${best} pts`:"Não jogada"}</div></div></button>`}
+const OCC_PROV=`<div class="prov">Nem todas essas situações são atendidas pelo SAMU em qualquer circunstância: a Regulação Médica avalia a gravidade, a necessidade de atendimento móvel e os recursos disponíveis. Referências marcadas com “validar” usam protocolos cujas páginas não estavam no material recebido e devem ser conferidas por profissional.</div>`;
+window.catalogView=function(open){
+  if(open===undefined||open===null)open=-1;const items=occItems();
+  const inCat=c=>items.filter(n=>Math.floor((n-1)/10)==c);
+  let nx=null,ctx="";
+  if(open>=0){const r=pickNext(inCat(open));if(r&&!r.rev){nx=r;ctx=CAT_NAMES[open]}}
+  if(!nx)nx=pickNext(items);
+  let h=topBar("Por categoria","home()")+`<div class="wrap"><div class="small mut">Lista oficial com as 100 ocorrências em 10 áreas. Missões profissionais seguem a sua função: <b>${roleName(S.chars[S.activeChar])}</b>.</div>`+nextBtn(nx,ctx)+`<div class="small mut" style="margin:10px 0 2px">Ou escolha a ocorrência:</div>`;
+  CAT_NAMES.forEach((cn,c)=>{const list=inCat(c);const played=list.filter(n=>S.best[occKey(CATALOG[n])]).length;const isOpen=open===c;
+    h+=`<div class="chap"><button class="chap-h" style="width:100%;background:none;border:0;color:inherit;text-align:left;cursor:pointer" onclick="catalogView(${isOpen?-1:c})"><div class="chap-n">${c+1}</div><div style="flex:1"><div class="chap-t">${cn}</div><div class="small mut">${played}/${list.length} jogadas</div></div><div style="font-size:20px">${isOpen?"▾":"▸"}</div></button>`;
+    if(isOpen)list.forEach(n=>h+=occRow(n));
+    h+=`</div>`});
+  app.innerHTML=h+OCC_PROV+`</div>${SOS}`;window.scrollTo(0,0);
+  OCC_CTX={back:`catalogView(${open})`,next:()=>{if(open>=0){const r=pickNext(inCat(open));if(r&&!r.rev)return r}return pickNext(items)}};
+};
+window.levelsView=function(){
+  const items=occItems();const rows={1:[],2:[],3:[],4:[],5:[]};items.forEach(n=>rows[occLevel(n)].push(n));
+  const order=[1,2,3,4,5].flatMap(l=>rows[l]);
+  let h=topBar("Por dificuldade","home()")+`<div class="wrap"><div class="small mut">Níveis definidos por risco iminente de morte, necessidade de atendimento imediato e trabalho em equipe. Quanto maior o nível, mais pontos e maior a chance de agravamento ao errar. Função: <b>${roleName(S.chars[S.activeChar])}</b>.</div>`+nextBtn(pickNext(order),"")+`<div class="small mut" style="margin:10px 0 2px">Ou escolha a ocorrência:</div>`;
+  for(let l=1;l<=5;l++){const L=LV[l];if(!rows[l].length)continue;const played=rows[l].filter(n=>S.best[occKey(CATALOG[n])]).length;
+    h+=`<div class="chap"><div class="chap-h"><div class="chap-n" style="color:${L.c}">${l}</div><div><div class="chap-t">${L.n}</div><div class="small mut">${played}/${rows[l].length} jogadas · pontos ×${L.mult.toFixed(2).replace(".",",")} · agravamento ${Math.round(L.p*100)}%</div></div></div>`;
+    rows[l].forEach(n=>h+=occRow(n));h+=`</div>`}
+  app.innerHTML=h+OCC_PROV+`</div>${SOS}`;window.scrollTo(0,0);
+  OCC_CTX={back:"levelsView()",next:()=>pickNext(order)};
+};
+let OCC_CTX=null;
+const _homeOcc=home;window.home=home=function(){OCC_CTX=null;_homeOcc()};
+const _reportOcc=report;
+window.report=report=function(){_reportOcc.apply(this,arguments);if(!OCC_CTX)return;
+  const b=document.querySelector(".top .back");if(b)b.setAttribute("onclick",OCC_CTX.back);
+  const row=document.querySelector(".foot .row");if(!row)return;const btns=row.querySelectorAll("button");const last=btns[btns.length-1];
+  if(last){last.className="btn sec";last.textContent="Lista";last.setAttribute("onclick",OCC_CTX.back)}
+  const r=OCC_CTX.next();if(r&&CATALOG[r.n]){row.insertAdjacentHTML("beforeend",`<button class="btn" onclick="brief('${CATALOG[r.n]}')">▶️ ${r.rev?"Revisar":"Próxima"}</button>`)}};
 /* ---------------- INÍCIO ---------------- */
 S.name?home():splash();
 </script>
