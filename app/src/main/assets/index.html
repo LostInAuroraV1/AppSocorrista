@@ -3922,6 +3922,185 @@ window.report=report=function(){_reportOcc.apply(this,arguments);if(!OCC_CTX)ret
   const row=document.querySelector(".foot .row");if(!row)return;const btns=row.querySelectorAll("button");const last=btns[btns.length-1];
   if(last){last.className="btn sec";last.textContent="Lista";last.setAttribute("onclick",OCC_CTX.back)}
   const r=OCC_CTX.next();if(r&&CATALOG[r.n]){row.insertAdjacentHTML("beforeend",`<button class="btn" onclick="brief('${CATALOG[r.n]}')">▶️ ${r.rev?"Revisar":"Próxima"}</button>`)}};
+/* ===== v1.1.3 — Escala de Coma de Glasgow (BP14 / BPed1) ===== */
+const GCS_SPLIT={15:[4,5,6],14:[4,4,6],13:[3,4,6],12:[3,4,5],11:[3,3,5],10:[2,3,5],9:[2,2,5],8:[2,2,4],7:[1,2,4],6:[1,1,4],5:[1,1,3],4:[1,1,2],3:[1,1,1]};
+const GCS_OVR={o024:[2,3,5],o077:[3,4,6]};
+const GCS_TXT={
+ adulto:{O:{4:"abre os olhos espontaneamente",3:"abre os olhos ao comando verbal",2:"abre os olhos só ao estímulo doloroso",1:"não abre os olhos"},
+   V:{5:"responde de forma orientada",4:"responde de forma confusa",3:"fala palavras inapropriadas",2:"emite só sons incompreensíveis",1:"não tem resposta verbal"},
+   M:{6:"obedece a comandos",5:"localiza o estímulo doloroso",4:"retira o membro ao estímulo doloroso",3:"faz flexão anormal (decorticação)",2:"faz extensão anormal (descerebração)",1:"não tem resposta motora"}},
+ bebe:{O:{4:"abre os olhos espontaneamente",3:"abre os olhos ao estímulo verbal",2:"abre os olhos só ao estímulo doloroso",1:"não abre os olhos"},
+   V:{5:"murmura ou balbucia",4:"está inquieto, irritado e choroso",3:"chora em resposta à dor",2:"geme em resposta à dor",1:"não tem resposta verbal"},
+   M:{6:"move-se espontânea e intencionalmente",5:"retira o membro ao toque",4:"retira o membro ao estímulo doloroso",3:"faz flexão anormal (decorticação)",2:"faz extensão anormal (descerebração)",1:"não tem resposta motora"}}};
+const GCS_ANS={};
+function gcsStep(id,o,v,m,bebe){
+  const T=GCS_TXT[bebe?"bebe":"adulto"],tot=o+v+m,cls=tot>=13?"leve":tot>=9?"moderado":"grave";
+  const fmt=(a,b,c)=>`O${a} + V${b} + M${c} = ${a+b+c}`;
+  const cand=[[o+1,v,m],[o,v+1,m],[o,v,m+1],[o-1,v,m],[o,v-1,m],[o,v,m-1],[o+1,v-1,m],[o,v+1,m-1]]
+    .filter(([a,b,c])=>a>=1&&a<=4&&b>=1&&b<=5&&c>=1&&c<=6&&!(a==o&&b==v&&c==m));
+  const seen=new Set(),bad=[];
+  for(const x of cand){const k=fmt(...x);if(!seen.has(k)){seen.add(k);bad.push(x)}if(bad.length==3)break}
+  const why=([a,b,c])=>a!=o?`Abertura ocular: “${T.O[o]}” vale ${o}.`:b!=v?`Melhor resposta verbal: “${T.V[v]}” vale ${v}.`:`Melhor resposta motora: “${T.M[m]}” vale ${m}.`;
+  return {stage:4,type:"choice",evt:{i:"🧠",t:`Avaliação neurológica: a vítima ${T.O[o]}, ${T.V[v]} e ${T.M[m]}.`},
+    q:`Qual a pontuação na Escala de Coma de Glasgow${bebe?" (bebê < 1 ano)":""}?`,
+    ref:bebe?"SBV · BPed1 — Escala de Coma de Glasgow pediátrica":"SBV · BP14 — Escala de Coma de Glasgow",
+    opts:[{t:fmt(o,v,m),ok:1,pts:{rec:3,dec:1},fb:`Correto: Glasgow ${tot}${tot<=8?" — informar imediatamente à Regulação (≤ 8)":""}. Cada item é avaliado de forma independente; no trauma, ${tot} = TCE ${cls}.`},
+      ...bad.map(x=>({t:fmt(...x),ok:0,fb:why(x)+` Total correto: ${tot}.`}))]};
+}
+/* ===== v1.2 — Avaliação primária ABCDE (BC1/BT1) com Glasgow ramificado (BP14/BT5/BC15/BP3) ===== */
+const TRAUMA_RX=/queda|colis|atropel|trauma|ferimento|arma|esmag|amput|fratur|moto|bicicleta|andaime|bloco|disparo|faca|projétil|ferragens|capot|tce|queimadura|choque elétrico|enforc|constri/i;
+function ageYears(v){const m=/(\d+)\s*anos?/.exec(v||"");if(m)return +m[1];if(/mes|bebê|bebe|RN/i.test(v||""))return 0;return 30}
+function pick3(list,used){const out=[];for(const x of list){if(out.length==3)break;if(!used.has(x.t)){used.add(x.t);out.push(x)}}return out}
+function sh(a){return a.map(x=>({...x}))}
+function stepA(trauma,a,cons){
+  const t=(a||"").toLowerCase();let ok,fb,why;
+  const cerv=trauma?", mantendo a estabilização manual da coluna cervical":"";
+  if(/obstru|engasg|sem fluxo/.test(t)){ok="Obstrução: aplicar a desobstrução indicada (Heimlich no responsivo; RCP com inspeção da boca no irresponsivo)";why="BC3."}
+  else if(/edema|rouc|estridor|fulig/.test(t)){ok="Via aérea ameaçada: O₂ em alto fluxo, BVM pronta e informar a Regulação para apoio avançado";why="Edema/estridor pode fechar a via aérea."}
+  else if(/coriza/.test(t)){ok="Aspirar suavemente as narinas e manter a cabeceira elevada, no colo se possível";why="Bebês respiram pelo nariz (BPed13)."}
+  else if(/ronco|secre|vômit|vomit|sangue|espuma|saliva/.test(t)){ok=`Aspirar a boca e abrir a via aérea (${trauma?"tração da mandíbula":"inclinação da cabeça e elevação do queixo"})${cerv}${cons?"":"; cânula orofaríngea se inconsciente sem reflexo de vômito"}`;why=trauma?"BT1 item 3 e BP3.":"BC1 item 2 e BP3."}
+  else {ok=`Via aérea pérvia: manter${cerv}${trauma?" e colocar o colar cervical assim que possível":""}, e seguir para o B`;why=trauma?"BT1 item 3.":"BC1 item 2."}
+  const bad=[
+    {t:"Pular a via aérea e começar pela pressão arterial",fb:"A sequência ABCDE corrige primeiro o que mata mais rápido: via aérea vem antes.",crit:0},
+    {t:"Varredura digital às cegas na boca",fb:"Só retire corpo estranho visível; a varredura às cegas pode empurrá-lo.",crit:0},
+    trauma?{t:"Hiperestender o pescoço para abrir a via aérea",fb:"No trauma, abrir com tração da mandíbula e coluna alinhada (BT1).",crit:1}:
+           {t:"Sentar a vítima para ver se melhora",fb:"Primeiro avalie e corrija a via aérea na posição adequada.",crit:0},
+    cons?{t:"Inserir cânula orofaríngea na vítima que responde",fb:"A cânula é para o inconsciente sem reflexo de vômito/tosse (BP3); no consciente provoca vômito.",crit:0}:
+         {t:"Esperar a vítima acordar para cuidar da via aérea",fb:"Rebaixado não protege a via aérea: corrija agora.",crit:1}];
+  return {stage:3,type:"choice",evt:{i:"🅰️",t:`A — Via aérea${trauma?" com proteção da coluna cervical":""}: ${a||"avaliar"}.`},q:"Qual a conduta no A?",ref:trauma?"SBV · BT1 — Avaliação primária no trauma":"SBV · BC1 — Avaliação primária (clínico)",
+    opts:[{t:ok,ok:1,pts:{seg:1,dec:2},fb:"Correto. "+why},...pick3(bad,new Set([ok])).map(x=>({...x,ok:0}))]};
+}
+function stepB(trauma,fr,sat,btxt,obst,kid){
+  const t=(btxt||"").toLowerCase();let ok,why;
+  if(obst){ok="Sem fluxo de ar: a prioridade é desobstruir a via aérea (A); O₂ e reavaliação logo após";why="BC3: sem desobstrução, oxigênio não chega aos pulmões."}
+  else if(/soprante/.test(t)){ok="Ferida soprante: curativo oclusivo de 3 pontos e O₂ por máscara 10–15 L/min";why="BT8."}
+  else if((!kid&&fr&&fr<8)||(fr&&fr<=10&&sat&&sat<90)||/superficial|apneia|fraca|lenta|gasping/.test(t)){ok="Ventilação inadequada: ventilar com BVM com reservatório e O₂ 10–15 L/min";why=trauma?"BT1 item 4: BVM se FR < 8 ou ventilação/oxigenação inadequadas.":"BC1 item 3 e BC4."}
+  else if(sat&&sat<94){ok=kid?`SatO₂ ${sat}%: O₂ por máscara pediátrica, no colo/posição de conforto, e manter a oximetria`:`SatO₂ ${sat}%: O₂ por máscara não reinalante 10–15 L/min e manter a oximetria`;why="O₂ indicado se SatO₂ < 94% (BC1/BT1)."}
+  else {ok=`Ventilação adequada (FR ${fr||"normal"}${sat?`, SatO₂ ${sat}%`:""}): monitorizar a oximetria e seguir para o C`;why="Sem hipóxia: O₂ não é necessário, mas a reavaliação é contínua."}
+  const lowSat=sat&&sat<94;
+  const bad=[
+    lowSat?{t:"Deixar o oxigênio para o hospital",fb:`SatO₂ ${sat}%: O₂ é indicado já na cena.`,crit:1}:{t:"Ventilar com BVM uma vítima que respira bem",fb:"BVM é para ventilação inadequada; aqui atrapalha.",crit:0},
+    {t:"O₂ por cateter nasal a 1 L/min",fb:"Fluxo insuficiente; o protocolo usa máscara não reinalante 10–15 L/min quando indicado.",crit:0},
+    {t:"Retirar o oxímetro para ganhar tempo",fb:"A oximetria orienta a conduta e a reavaliação.",crit:0},
+    trauma?{t:"Não expor o tórax para não demorar",fb:"No B do trauma, exponha e avalie expansão, simetria e lesões (BT1).",crit:0}:{t:"Deitar plano qualquer paciente com falta de ar",fb:"Com desconforto respiratório, decúbito elevado se não houver contraindicação.",crit:0}];
+  return {stage:3,type:"choice",evt:{i:"🅱️",t:`B — Respiração: ${btxt||"avaliar"}${fr&&!/FR/.test(btxt||"")?` · FR ${fr}`:""}${sat&&!/Sat/.test(btxt||"")?` · SatO₂ ${sat}%`:""}.`},q:"Qual a conduta no B?",ref:trauma?"SBV · BT1 item 4":"SBV · BC1 item 3",
+    opts:[{t:ok,ok:1,pts:{seg:1,dec:2},fb:"Correto. "+why},...pick3(bad,new Set([ok])).map(x=>({...x,ok:0}))]};
+}
+function stepC(trauma,pa,fc,ctxt,kid){
+  const t=(ctxt||"").toLowerCase();const pas=parseInt(pa,10);let ok,why;
+  const fcn=parseInt(fc,10)||0;const vag=/vaginal|uter|pós-parto/.test(t);
+  const hemo=/sangr|hemorr|jato|amput/.test(t)&&!/sem sangr|controlad|anormal/.test(t)&&!vag;
+  const shock=(pas&&pas<(kid?70:90))||/marm|enchimento\s*(capilar\s*)?[3-9]|ec\s*[3-9]/.test(t)||(!kid&&fcn>120&&pas&&pas<=100)||(pas&&pas<100&&/fria|palid|pálid|sudore|úmida/.test(t));
+  if(vag&&!shock){ok="Sangramento vaginal: compressa/absorvente externo sem tamponar, estimar a perda e monitorizar sinais de choque";why="Protocolos BGO: não tamponar; vigiar choque."}
+  else if(hemo){ok="Controlar o sangramento: compressão direta; torniquete se em membro e não controlar";why="BT1 item 5 e BP8/BP9."}
+  else if(shock){ok="Sinais de choque: deitar, prevenir hipotermia, monitorizar e informar a Regulação";why=trauma?"BT1 item 5 e BT4.":"BC1 item 4 e BC11."}
+  else {ok="Circulação estável: monitorizar pulso, PA e enchimento capilar e seguir";why="Sem hemorragia nem sinais de choque; reavaliar no transporte."}
+  const bad=[
+    {t:"Oferecer água para repor o volume",fb:"Nada por via oral: risco de vômito e aspiração.",crit:0},
+    shock?{t:"Sentar a vítima para medir melhor a PA",fb:"Com sinais de choque, mantenha deitada.",crit:1}:{t:"Elevar as pernas de todos os pacientes",fb:"Medida só para choque e sem contraindicação (trauma de pelve/coluna).",crit:0},
+    hemo?{t:"Lavar o ferimento antes de comprimir",fb:"Primeiro estanque: compressão direta imediata.",crit:1}:{t:"Aplicar torniquete preventivo",fb:"Torniquete só para hemorragia de membro que não para com compressão.",crit:0},
+    {t:"Ligar o ar-condicionado no máximo",fb:"Hipotermia piora a perfusão e a coagulação.",crit:0}];
+  return {stage:3,type:"choice",evt:{i:"©️",t:`C — Circulação: ${ctxt||"avaliar"}${pa&&pa!="—"&&!/PA/.test(ctxt||"")?` · PA ${pa}`:""}${fc&&fc!="—"&&!/FC/.test(ctxt||"")?` · FC ${fc}`:""}.`},q:"Qual a conduta no C?",ref:trauma?"SBV · BT1 item 5":"SBV · BC1 item 4",
+    opts:[{t:ok,ok:1,pts:{seg:1,dec:2},fb:"Correto. "+why},...pick3(bad,new Set([ok])).map(x=>({...x,ok:0}))]};
+}
+function stepE(){
+  return {stage:3,type:"choice",evt:{i:"🇪",t:"E — Exposição: procurar lesões escondidas sem esfriar a vítima."},q:"Qual a conduta no E?",ref:"SBV · BT1 item 7",
+    opts:[{t:"Cortar as vestes só onde necessário, sem movimentar demais, e cobrir com manta aluminizada",ok:1,pts:{seg:1,dec:2},fb:"Correto: expor com prevenção e controle da hipotermia (BT1)."},
+      {t:"Retirar toda a roupa e deixar a vítima descoberta",ok:0,fb:"Exponha só o necessário e previna a hipotermia."},
+      {t:"Não expor para ganhar tempo",ok:0,fb:"Lesões escondidas passam despercebidas; a exposição é parte do BT1."},
+      {t:"Ligar o ar-condicionado frio da ambulância",ok:0,fb:"O BT1 orienta desligar o ar-condicionado para prevenir hipotermia."}]};
+}
+/* D — pontuação item a item */
+const GCS_ITEMS={adulto:{O:[[4,"Abertura ocular espontânea"],[3,"Abertura ao comando verbal"],[2,"Abertura ao estímulo doloroso"],[1,"Sem abertura ocular"]],
+  V:[[5,"Orientada"],[4,"Confusa"],[3,"Palavras inapropriadas"],[2,"Sons incompreensíveis"],[1,"Sem resposta verbal"]],
+  M:[[6,"Obedece a comandos"],[5,"Localiza o estímulo doloroso"],[4,"Retira ao estímulo doloroso"],[3,"Flexão anormal (decorticação)"],[2,"Extensão anormal (descerebração)"],[1,"Sem resposta motora"]]},
+ bebe:{O:[[4,"Abertura ocular espontânea"],[3,"Abertura ao estímulo verbal"],[2,"Abertura ao estímulo doloroso"],[1,"Sem abertura ocular"]],
+  V:[[5,"Murmura ou balbucia"],[4,"Inquieto, irritado, choroso"],[3,"Chora em resposta à dor"],[2,"Geme em resposta à dor"],[1,"Sem resposta verbal"]],
+  M:[[6,"Move-se espontânea e intencionalmente"],[5,"Retira o membro ao toque"],[4,"Retira ao estímulo doloroso"],[3,"Flexão anormal (decorticação)"],[2,"Extensão anormal (descerebração)"],[1,"Sem resposta motora"]]}};
+function stepD(k,val,bebe){
+  const T=GCS_TXT[bebe?"bebe":"adulto"][k],items=GCS_ITEMS[bebe?"bebe":"adulto"][k];
+  const nm={O:"Abertura ocular",V:"Melhor resposta verbal",M:"Melhor resposta motora"}[k];
+  const all=items.map(([v,t])=>({t:`${t} — ${v}`,ok:v==val?1:0,gv:v,pts:v==val?{rec:2}:undefined,fb:v==val?`Correto: ${nm.toLowerCase()} = ${v}.`:`“${T[val]}” corresponde a ${val} ponto(s).`}));
+  const right=all.find(x=>x.ok),others=all.filter(x=>!x.ok).sort((a,b)=>Math.abs(a.gv-val)-Math.abs(b.gv-val)).slice(0,3);
+  return {stage:3,type:"choice",gk:k,evt:{i:"🅳",t:`D — Glasgow · ${nm}: a vítima ${T[val]}.`},q:`Quanto vale a ${nm.toLowerCase()}?`,ref:bebe?"SBV · BPed1 — Glasgow pediátrica":"SBV · BP14 — Escala de Coma de Glasgow",opts:[right,...others]};
+}
+const BAND=n=>n>=13?"leve":n>=9?"moderado":"grave";
+const BAND_TXT={leve:"13 a 15",moderado:"9 a 12",grave:"3 a 8"};
+const BAND_ACT={
+  leve:"Seguir a avaliação: pupilas, sinais vitais e Glasgow repetido de forma seriada",
+  moderado:"Garantir via aérea e posição, O₂ se SatO₂ < 94%, Glasgow seriado e informar precocemente a Regulação",
+  grave:"Paciente crítico: aspirar, cânula orofaríngea se sem reflexo de vômito, BVM se ventilação inadequada e informar imediatamente a Regulação"};
+const BAND_WRONG=[
+  {t:"Liberar a vítima no local, pois está consciente o suficiente",fb:"Alteração neurológica exige avaliação e transporte conforme a Regulação.",crit:1},
+  {t:"Dar café ou água para a vítima ficar acordada",fb:"Nada por via oral em quem tem alteração de consciência.",crit:0},
+  {t:"Deixar a vítima dormir para descansar, sem reavaliar",fb:"O Glasgow deve ser repetido de forma seriada (BT5).",crit:0}];
+function stepDBranch(id,bebe){return {stage:4,type:"choice",gbranch:1,gid:id,bebe,evt:{i:"🧠",t:"Conduta pelo Glasgow."},q:"Com a pontuação que você calculou, qual a conduta?",
+  opts:[{t:"—",ok:1,pts:{dec:3,seg:1},fb:""},{t:"—",ok:0,fb:""},{t:"—",ok:0,fb:""},{t:"—",ok:0,fb:""}]}}
+function buildBranch(st){
+  const tot=GCS_ANS[st.gid],g=M.gcs||{},sum=(g.O||0)+(g.V||0)+(g.M||0)||tot;
+  const pb=BAND(sum),tb=BAND(tot),same=pb==tb;
+  const base=`Você somou O${g.O||"?"} + V${g.V||"?"} + M${g.M||"?"} = ${sum} (faixa ${BAND_TXT[pb]}).`;
+  const under=tb=="grave"&&pb!="grave"||tb=="moderado"&&pb=="leve";
+  const main={t:BAND_ACT[pb],ok:same?1:0,pts:same?{dec:3,seg:1}:undefined,crit:same?0:(under?1:0),
+    fb:same?`Correto: Glasgow ${tot} → ${BAND_ACT[tb].toLowerCase()}.${tot<10?" Abaixo de 10, informar precocemente a Regulação (BT5).":""}`:
+      `Essa seria a conduta para Glasgow ${BAND_TXT[pb]}, mas o correto era ${tot} (O${GCS_ANS_SPLIT[st.gid][0]} V${GCS_ANS_SPLIT[st.gid][1]} M${GCS_ANS_SPLIT[st.gid][2]}). A conduta certa: ${BAND_ACT[tb].toLowerCase()}.${under?" Subestimar o rebaixamento deixa a via aérea desprotegida.":" Superestimar leva a procedimentos desnecessários, como a cânula em quem tem reflexo."}`};
+  const others=["leve","moderado","grave"].filter(x=>x!=pb).map(x=>({t:BAND_ACT[x],ok:0,fb:`Essa conduta é para Glasgow ${BAND_TXT[x]}.${same?"":` O correto era ${tot}: ${BAND_ACT[tb].toLowerCase()}.`}`,crit:(tb=="grave"&&x!="grave")?1:0}));
+  /* cálculo errado: só aparecem condutas da faixa errada (a sequência segue o erro do jogador) */
+  const pool=same?others:others.filter(o=>o.t!=BAND_ACT[tb]);
+  const extras=BAND_WRONG.slice().sort(()=>Math.random()-.5).slice(0,4-1-pool.length).map(x=>({...x,ok:0}));
+  const opts=[main,...pool,...extras];
+  for(let i=opts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[opts[i],opts[j]]=[opts[j],opts[i]]}
+  return {...st,evt:{i:"🧠",t:base},opts};
+}
+const GCS_ANS_SPLIT={};
+(function addABCDE(){
+  for(const id in MISSIONS){const b=MISSIONS[id];if(!b.pro||!b.roles)continue;const f=FICHA[id];if(!f||!f.sv)continue;
+    const fc=String(f.sv.FC).trim();const n=parseInt(f.sv.GCS,10);
+    if(fc=="0"||n==3)continue;
+    if(String(f.sv.FR).trim()=="—"&&String(f.sv.PA).trim()=="—")continue;   /* cena sem acesso à vítima (rede energizada, agressor) */                     /* PCR: segue BC5, sem ABCDE pontuado */
+    let g=GCS_OVR[id]||(n>=4&&n<=15?GCS_SPLIT[n]:null);
+    const ab=f.abcde||{},trauma=TRAUMA_RX.test(`${f.mec} ${f.queixa} ${b.ch||""}`);
+    const kid=ageYears(f.vit)<12,bebe=ageYears(f.vit)<1;
+    const fr=parseInt(f.sv.FR,10)||0,sat=parseInt(f.sv.Sat,10)||0;
+    const cons=g?g[0]>=3&&g[1]>=4:true;
+    if(g){const tot=g[0]+g[1]+g[2];GCS_ANS[id]=tot;GCS_ANS_SPLIT[id]=g;f.sv.GCS=String(tot)}
+    const red=t=>typeof t=="string"?t.replace(/Glasgow\s*\d+/gi,"Glasgow a pontuar"):t;
+    const redObj=o=>{if(!o)return;["t","r","info","q"].forEach(k=>{if(o[k])o[k]=red(o[k])});
+      if(o.t&&/glasgow/i.test(o.t)&&o.r&&/^\s*\d+\.?\s*$/.test(o.r))o.r="Avaliado — pontue no D da avaliação primária."};
+    if(g){(b.checks||[]).forEach(redObj);Object.values(b.roles).forEach(ro=>(ro.checks||[]).forEach(redObj));((b.scene&&b.scene.spots)||[]).forEach(redObj)}
+    const block=[stepA(trauma,ab.A,cons),stepB(trauma,fr,sat,ab.B,/obstru|engasg|sem fluxo/i.test((ab.A||"")+(ab.B||"")),kid),stepC(trauma,f.sv.PA,f.sv.FC,ab.C,kid)];
+    if(g)block.push(stepD("O",g[0],bebe),stepD("V",g[1],bebe),stepD("M",g[2],bebe),stepDBranch(id,bebe));
+    if(trauma)block.push(stepE());
+    ["tec","enf"].forEach(r=>{const ro=b.roles[r];if(!ro)return;const st=(ro.steps||b.steps).slice();
+      const ki=st.findIndex(s=>s&&s.kit);const at=ki>=0?ki+1:0;
+      if(g)for(let j=0;j<Math.min(at,st.length);j++){const x=st[j];if(x&&x.opts){st[j]={...x,q:red(x.q),opts:x.opts.map(o=>({...o,t:red(o.t),fb:red(o.fb)}))}}}
+      st.splice(Math.min(at,st.length),0,...block.map(x=>({...x,opts:x.opts.map(o=>({...o}))})));ro.steps=st});
+    if(g){b.lib=[...(b.lib||["samu"]).filter(k=>k!="glasgow"),"glasgow"];if(b.roles.tec)b.roles.tec.lib=b.lib;if(b.roles.enf)b.roles.enf.lib=b.lib}
+  }
+})();
+/* registra o que o jogador pontuou e monta a conduta pela faixa calculada */
+const _cfG=confirmStep;
+window.confirmStep=confirmStep=function(){const st=M.steps[M.si];
+  if(!M.locked&&st&&st.gk&&sel.length){const o=st.opts[sel[0]];M.gcs=M.gcs||{};M.gcs[st.gk]=o.gv}
+  return _cfG.apply(this,arguments)};
+const _svG=stepView;
+window.stepView=stepView=function(){const st=M.steps[M.si];if(st&&st.gbranch&&!st.built){M.steps[M.si]={...buildBranch(st),built:1}}return _svG.apply(this,arguments)};
+
+LIBRARY.glasgow={i:"🧠",t:"Escala de Coma de Glasgow",p:[
+  "Avalia o nível de consciência somando três itens, cada um de forma independente. Vai de 3 (sem reatividade) a 15 (alerta). — SBV BP14.",
+  "ABERTURA OCULAR — Espontânea 4 · Ao comando verbal 3 · Ao estímulo doloroso 2 · Sem abertura 1.",
+  "MELHOR RESPOSTA VERBAL — Orientada 5 · Confusa 4 · Palavras inapropriadas 3 · Sons incompreensíveis 2 · Sem resposta 1.",
+  "MELHOR RESPOSTA MOTORA — Obedece a comandos 6 · Localiza a dor 5 · Retira o membro à dor 4 · Flexão anormal (decorticação) 3 · Extensão anormal (descerebração) 2 · Sem resposta 1.",
+  "Bebê (< 1 ano) — Verbal: murmura/balbucia 5 · inquieto, irritado, choroso 4 · chora à dor 3 · geme à dor 2 · ausente 1. Motora: move-se espontânea e intencionalmente 6 · retira ao toque 5 · retira à dor 4 · decorticação 3 · descerebração 2 · ausente 1. — BPed1.",
+  "No TCE: leve 13–15 · moderado 9–12 · grave 3–8. Glasgow ≤ 8: informar imediatamente à Regulação Médica e proteger a via aérea.",
+  "Registre a pontuação de cada item (ex.: O3 V4 M6 = 13) e repita a avaliação de forma seriada: a queda de 2 pontos ou mais indica piora.",
+  "Afaste causas que alteram a avaliação: hipoglicemia, intoxicação, sedação, deficiências prévias."]};
+/* a ficha não revela o Glasgow antes da avaliação */
+const _fichaG=window.fichaHtml;
+window.fichaHtml=function(full){let h=_fichaG(full);if(!M||M.reveal||!GCS_ANS[M.id])return h;
+  return h.replace(/(<small>Glasgow<\/small><b>)[^<]*(<\/b>)(<small><\/small>)?/,"$1a avaliar$2").replace(/Glasgow\s*\d+/gi,"Glasgow: a avaliar")};
+const _repG=report;window.report=report=function(){if(M)M.reveal=1;return _repG.apply(this,arguments)};
+
 /* ---------------- INÍCIO ---------------- */
 S.name?home():splash();
 </script>
